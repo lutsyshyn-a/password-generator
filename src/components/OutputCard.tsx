@@ -5,10 +5,12 @@ interface Props {
   result: Result | null;
   hidden: boolean;
   isPhrase: boolean;
+  keyCount: number;
   copyState: "idle" | "ok" | "fail";
   onToggleHidden: () => void;
   onRegenerate: () => void;
   onCopy: () => void;
+  onDownload?: () => void;
 }
 
 function activateShortcut(event: KeyboardEvent<HTMLButtonElement>, code: string, action: () => void) {
@@ -18,13 +20,17 @@ function activateShortcut(event: KeyboardEvent<HTMLButtonElement>, code: string,
   action();
 }
 
-export function OutputCard({ result, hidden, isPhrase, copyState, onToggleHidden, onRegenerate, onCopy }: Props) {
+export function OutputCard({
+  result, hidden, isPhrase, keyCount, copyState, onToggleHidden, onRegenerate, onCopy, onDownload,
+}: Props) {
+  const batch = keyCount > 1;
+  const previewCount = Math.min(keyCount, 10);
   const level = result ? strengthLevel(result.bits) : null;
   const bits = result ? Math.floor(result.bits) : 0;
-  const strength = level ? `${level.label} · ${bits} біт` : "";
+  const strength = level ? `${level.label} · ${bits} біт${batch ? " на ключ" : ""}` : "";
 
   const copyLabel =
-    copyState === "ok" ? "Скопійовано" : copyState === "fail" ? "Не вдалося скопіювати" : "Скопіювати";
+    copyState === "ok" ? "Скопійовано" : copyState === "fail" ? "Не вдалося скопіювати" : batch ? "Скопіювати всі" : "Скопіювати";
 
   return (
     <section className="card result" aria-label="Результат">
@@ -35,15 +41,20 @@ export function OutputCard({ result, hidden, isPhrase, copyState, onToggleHidden
         </button>
       </div>
 
-      <div className={`out${hidden ? " masked" : ""}${isPhrase ? " phrase" : ""}`}>
+      <div
+        className={`out${hidden ? " masked" : ""}${isPhrase ? " phrase" : ""}${batch ? " batch-preview" : ""}`}
+        role={batch && !hidden ? "region" : undefined}
+        aria-label={batch && !hidden ? "Попередній перегляд Hex-ключів" : undefined}
+        tabIndex={batch && !hidden ? 0 : undefined}
+      >
         {!result ? (
           <span className="empty">Увімкніть хоча б один набір символів</span>
         ) : hidden ? (
           <>
-            <span aria-hidden="true">{"•".repeat(result.value.length)}</span>
+            <span aria-hidden="true">{"•".repeat(batch ? result.value.indexOf("\n") : result.value.length)}</span>
             <span className="sr-only">Результат приховано</span>
           </>
-        ) : isPhrase ? result.value : (
+        ) : batch ? result.value.split("\n", previewCount).join("\n") : isPhrase ? result.value : (
           [...result.value].map((c, i) => (
             <span key={i} className={/[0-9]/.test(c) ? "d" : /[A-Za-z]/.test(c) ? undefined : "s"}>
               {c}
@@ -51,6 +62,9 @@ export function OutputCard({ result, hidden, isPhrase, copyState, onToggleHidden
           ))
         )}
       </div>
+      {batch && !hidden && previewCount < keyCount && (
+        <p className="hex-note">Показано {previewCount} із {keyCount} ключів.</p>
+      )}
 
       <div className="meter">
         <div
@@ -89,6 +103,11 @@ export function OutputCard({ result, hidden, isPhrase, copyState, onToggleHidden
         </button>
       </div>
 
+      {onDownload && (
+        <button type="button" className="btn sec download" onClick={onDownload}>
+          Завантажити TXT
+        </button>
+      )}
       <p className="hint">На відповідній кнопці натисніть R для генерації або C для копіювання.</p>
       <span className="sr-only" role="status">
         {copyState === "ok" ? "Скопійовано в буфер обміну" : copyState === "fail" ? copyLabel : ""}

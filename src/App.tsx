@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { HexCount } from "./components/HexCount";
 import { LengthControl } from "./components/LengthControl";
 import { OutputCard } from "./components/OutputCard";
 import { Toggle } from "./components/Toggle";
 import { useSettings } from "./hooks/useSettings";
 import { copyText } from "./lib/clipboard";
-import { GROUP_KEYS, LIMITS, PASSWORD_GROUPS, generate, type Mode, type PasswordGroup, type Result } from "./lib/generator";
+import { GROUP_KEYS, LIMITS, PASSWORD_GROUPS, generate, generateHexBatch, type Mode, type PasswordGroup, type Result } from "./lib/generator";
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
   { id: "pw", label: "Пароль", hint: "Результат містить символи з кожного ввімкненого набору." },
@@ -35,6 +36,18 @@ const LENGTH_CONTROLS = {
   phraseWords: { ...LIMITS.phrase, label: "Кількість слів", presets: [6, 8, 10, 12] },
 };
 
+function downloadHexKeys(value: string) {
+  const file = new Blob([value], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "hex-keys.txt";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export default function App() {
   const [s, set] = useSettings();
   const [nonce, setNonce] = useState(0);
@@ -43,14 +56,16 @@ export default function App() {
   const {
     mode, length, keyBytes, phraseWords, lower, upper, digits, symbols, extraSymbols, noAmbiguous,
   } = s;
+  const keyCount = mode === "hex" ? s.hexCount : 1;
 
   const result = useMemo(() => {
     if (mode === "pw") {
       return generate({ mode, length, lower, upper, digits, symbols, extraSymbols, noAmbiguous });
     }
     if (mode === "phrase") return generate({ mode, words: phraseWords });
+    if (mode === "hex") return generateHexBatch(keyBytes, keyCount);
     return generate({ mode, bytes: keyBytes });
-  }, [mode, length, keyBytes, phraseWords, lower, upper, digits, symbols, extraSymbols, noAmbiguous, nonce]);
+  }, [mode, length, keyBytes, keyCount, phraseWords, lower, upper, digits, symbols, extraSymbols, noAmbiguous, nonce]);
 
   const regenerate = () => setNonce((n) => n + 1);
 
@@ -86,10 +101,12 @@ export default function App() {
             result={result}
             hidden={s.hidden}
             isPhrase={mode === "phrase"}
+            keyCount={keyCount}
             copyState={copy?.result === result ? copy.state : "idle"}
             onToggleHidden={() => set("hidden", !s.hidden)}
             onRegenerate={regenerate}
             onCopy={onCopy}
+            onDownload={mode === "hex" && result ? () => downloadHexKeys(result.value) : undefined}
           />
         </div>
 
@@ -114,6 +131,9 @@ export default function App() {
               value={s[lengthKey]}
               onChange={(v) => set(lengthKey, v)}
             />
+            {mode === "hex" && (
+              <HexCount value={s.hexCount} onChange={(value) => set("hexCount", value)} />
+            )}
             {mode === "phrase" && (
               <p className="wordlist-credit">
                 Словник <a href="https://www.eff.org/dice">EFF Long Wordlist</a>

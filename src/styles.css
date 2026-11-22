@@ -21,6 +21,7 @@ h1{font-size:clamp(28px,5vw,44px);line-height:1.08;font-weight:700;letter-spacin
 .out{background:var(--out);border-radius:14px;padding:18px 16px;min-height:112px;font:500 clamp(18px,2.4vw,23px)/1.55 ui-monospace,"SF Mono",Menlo,Consolas,monospace;overflow-wrap:anywhere;word-break:break-all;letter-spacing:.02em;display:block;user-select:all;-webkit-user-select:all}
 .out .d{color:var(--digit)}.out .s{color:var(--orange)}
 .out.phrase{word-break:normal}
+.out.batch-preview{white-space:pre-wrap;max-height:320px;overflow:auto}
 .out.masked{color:var(--sub);letter-spacing:.12em;user-select:none;-webkit-user-select:none;word-break:break-all}
 .out .empty{font-family:inherit;font-size:16px;color:var(--sub);letter-spacing:0;font-weight:400}
 .meter{display:flex;align-items:center;gap:10px;margin:14px 2px 0;color:var(--sub);font-size:13px}
@@ -33,11 +34,12 @@ h1{font-size:clamp(28px,5vw,44px);line-height:1.08;font-weight:700;letter-spacin
 button{font:inherit;font-weight:600;border:0;border-radius:12px;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;transition:background .15s,transform .1s,color .15s}
 button:active:not(:disabled){transform:scale(.98)}
 button:disabled{opacity:.5;cursor:default}
-button:focus-visible,input[type=text]:focus-visible,.tg input:focus-visible+.sw{outline:3px solid color-mix(in srgb,var(--blue) 50%,transparent);outline-offset:2px}
+button:focus-visible,input[type=text]:focus-visible,.batch-preview:focus-visible,.tg input:focus-visible+.sw{outline:3px solid color-mix(in srgb,var(--blue) 50%,transparent);outline-offset:2px}
 .btn{flex:1;min-height:50px;padding:12px 18px;font-size:17px;min-width:0}
 .pri{background:var(--action);color:var(--button-ink)}
 .pri.ok{background:var(--on);color:var(--success-ink)}
 .sec{background:var(--fill);color:var(--text)}
+.download{width:100%;margin-top:14px}
 .actions{display:flex;gap:10px;justify-content:center;position:fixed;left:0;right:0;bottom:0;z-index:10;padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:color-mix(in srgb,var(--bg) 78%,transparent);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);border-top:.5px solid var(--line)}
 .actions .btn{max-width:340px}
 
@@ -50,6 +52,9 @@ button:focus-visible,input[type=text]:focus-visible,.tg input:focus-visible+.sw{
 .len{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .len label{font-weight:600}
 .num{width:84px;font:inherit;font-size:16px;font-weight:600;text-align:right;border:0;border-radius:10px;background:var(--fill);color:var(--text);padding:8px 12px}
+.hex-count{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.hex-count .len{margin-bottom:0;gap:10px}
+.hex-note{color:var(--sub);font-size:13px;margin:6px 2px 0}
 input[type=range]{-webkit-appearance:none;appearance:none;display:block;width:100%;height:32px;background:none;margin:0;touch-action:pan-y;--p:0%}
 input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--blue) var(--p),var(--fill) var(--p))}
 input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:var(--fill)}

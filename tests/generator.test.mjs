@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { generate, LIMITS, PASSWORD_GROUPS } from "../src/lib/generator.ts";
+import { generate, generateHexBatch, LIMITS, PASSWORD_GROUPS } from "../src/lib/generator.ts";
 import { WORDS } from "../src/lib/wordlist.ts";
 
 const passwordOptions = {
@@ -60,6 +60,24 @@ test("Hex and Base64URL decode to the requested byte length and round-trip canon
       assert.equal(decoded.toString(encoding), value);
       assert.equal(bits, bytes * 8);
     }
+  }
+});
+
+test("a maximum-size Hex batch has one complete key per line across Web Crypto draws", () => {
+  const bytes = LIMITS.key.max;
+  const { value, bits } = generateHexBatch(bytes, LIMITS.hexCount.max);
+  const keys = value.split("\n");
+  assert.equal(keys.length, LIMITS.hexCount.max);
+  assert.equal(bits, bytes * 8);
+  for (const key of keys) {
+    assert.equal(key.length, bytes * 2);
+    assert.match(key, /^[a-f0-9]+$/);
+  }
+});
+
+test("Hex batch count must be a whole number within the supported range", () => {
+  for (const count of [0, 2.5, LIMITS.hexCount.max + 1, NaN, Infinity]) {
+    assert.throws(() => generateHexBatch(32, count), RangeError);
   }
 });
 

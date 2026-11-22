@@ -5,6 +5,7 @@ export interface Settings extends PasswordOptions {
   mode: Mode;
   length: number;
   keyBytes: number;
+  hexCount: number;
   phraseWords: number;
   hidden: boolean;
 }
@@ -15,6 +16,7 @@ const DEFAULTS: Settings = {
   mode: "pw",
   length: LIMITS.password.initial,
   keyBytes: LIMITS.key.initial,
+  hexCount: LIMITS.hexCount.initial,
   phraseWords: LIMITS.phrase.initial,
   lower: true,
   upper: true,
@@ -44,6 +46,7 @@ function load(): Settings {
     if (mode === "hex" || mode === "b64" || mode === "phrase") s.mode = mode;
     s.length = readLength(saved.length, LIMITS.password);
     s.keyBytes = readLength(saved.keyBytes, LIMITS.key);
+    s.hexCount = readLength(saved.hexCount, LIMITS.hexCount);
     s.phraseWords = readLength(saved.phraseWords, LIMITS.phrase);
     if (current === null && (mode === "hex" || mode === "b64")) {
       const bytes = mode === "hex" ? Math.ceil(s.length / 2) : Math.floor(s.length * 3 / 4);

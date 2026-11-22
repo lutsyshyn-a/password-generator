@@ -25,6 +25,7 @@ export type Options =
 export const LIMITS = {
   password: { min: 8, max: 256, initial: 24 },
   key: { min: 8, max: 192, initial: 32 },
+  hexCount: { min: 1, max: 1000, initial: 1 },
   phrase: { min: 5, max: 12, initial: 6 },
 };
 
@@ -49,6 +50,26 @@ function validateLength(length: number, { min, max }: { min: number; max: number
 export interface Result {
   value: string;
   bits: number;
+}
+
+function encodeHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+export function generateHexBatch(bytes: number, count: number): Result {
+  validateLength(bytes, LIMITS.key);
+  validateLength(count, LIMITS.hexCount);
+  // Web Crypto accepts at most 65,536 bytes per draw. Keep each key in one chunk.
+  const keysPerChunk = Math.floor(65536 / bytes);
+  const keys: string[] = [];
+  while (keys.length < count) {
+    const chunkSize = Math.min(count - keys.length, keysPerChunk) * bytes;
+    const chunk = crypto.getRandomValues(new Uint8Array(chunkSize));
+    for (let offset = 0; offset < chunk.length; offset += bytes) {
+      keys.push(encodeHex(chunk.subarray(offset, offset + bytes)));
+    }
+  }
+  return { value: keys.join("\n"), bits: bytes * 8 };
 }
 
 function passwordBits(groups: string[], length: number): number {
@@ -98,6 +119,7 @@ function generatePassword(o: Extract<Options, { mode: "pw" }>): Result | null {
 
 export function generate(o: Options): Result | null {
   if (o.mode === "pw") return generatePassword(o);
+  if (o.mode === "hex") return generateHexBatch(o.bytes, 1);
 
   if (o.mode === "phrase") {
     validateLength(o.words, LIMITS.phrase);
@@ -107,9 +129,7 @@ export function generate(o: Options): Result | null {
 
   validateLength(o.bytes, LIMITS.key);
   const bytes = crypto.getRandomValues(new Uint8Array(o.bytes));
-  const value = o.mode === "hex"
-    ? Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")
-    : btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const value = btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   return { value, bits: bytes.length * 8 };
 }
 
