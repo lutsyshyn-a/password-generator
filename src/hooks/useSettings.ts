@@ -1,38 +1,59 @@
 import { useCallback, useEffect, useState } from "react";
-import { MAX_LEN, MIN_LEN, type Mode } from "../lib/generator";
+import { GROUP_KEYS, LIMITS, type Mode, type PasswordOptions } from "../lib/generator";
 
-export interface Settings {
+export interface Settings extends PasswordOptions {
   mode: Mode;
   length: number;
-  lower: boolean;
-  upper: boolean;
-  digits: boolean;
-  symbols: boolean;
-  noAmbiguous: boolean;
+  keyBytes: number;
+  phraseWords: number;
   hidden: boolean;
 }
 
-const KEY = "pwgen:v1";
+const KEY = "pwgen:v2";
 
 const DEFAULTS: Settings = {
   mode: "pw",
-  length: 24,
+  length: LIMITS.password.initial,
+  keyBytes: LIMITS.key.initial,
+  phraseWords: LIMITS.phrase.initial,
   lower: true,
   upper: true,
   digits: true,
   symbols: false,
+  extraSymbols: false,
   noAmbiguous: false,
   hidden: false,
 };
 
+function readLength(value: unknown, { min, max, initial }: typeof LIMITS.password) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.max(min, Math.min(max, Math.round(value)))
+    : initial;
+}
+
 function load(): Settings {
   try {
-    const raw = localStorage.getItem(KEY);
+    const current = localStorage.getItem(KEY);
+    const raw = current ?? localStorage.getItem("pwgen:v1");
     if (!raw) return DEFAULTS;
-    const s = { ...DEFAULTS, ...(JSON.parse(raw) as Partial<Settings>) };
-    if (!["pw", "hex", "b64"].includes(s.mode)) s.mode = "pw";
-    s.length = Math.max(MIN_LEN, Math.min(MAX_LEN, Math.round(Number(s.length)) || DEFAULTS.length));
-    if (!s.lower && !s.upper && !s.digits && !s.symbols) s.lower = true;
+    const saved = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!saved || typeof saved !== "object") return DEFAULTS;
+
+    const s = { ...DEFAULTS };
+    const { mode } = saved;
+    if (mode === "hex" || mode === "b64" || mode === "phrase") s.mode = mode;
+    s.length = readLength(saved.length, LIMITS.password);
+    s.keyBytes = readLength(saved.keyBytes, LIMITS.key);
+    s.phraseWords = readLength(saved.phraseWords, LIMITS.phrase);
+    if (current === null && (mode === "hex" || mode === "b64")) {
+      const bytes = mode === "hex" ? Math.ceil(s.length / 2) : Math.floor(s.length * 3 / 4);
+      s.keyBytes = readLength(bytes, LIMITS.key);
+    }
+    for (const key of [...GROUP_KEYS, "noAmbiguous", "hidden"] as const) {
+      const value = saved[key];
+      if (typeof value === "boolean") s[key] = value;
+    }
+    if (!GROUP_KEYS.some((key) => s[key])) s.lower = true;
     return s;
   } catch {
     return DEFAULTS;

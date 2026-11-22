@@ -1,68 +1,75 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LengthControl } from "./components/LengthControl";
-import { OutputCard, type CopyState } from "./components/OutputCard";
+import { OutputCard } from "./components/OutputCard";
 import { Toggle } from "./components/Toggle";
 import { useSettings } from "./hooks/useSettings";
 import { copyText } from "./lib/clipboard";
-import { SAFE_SYMBOLS, generate, type Mode } from "./lib/generator";
+import { GROUP_KEYS, LIMITS, PASSWORD_GROUPS, generate, type Mode, type PasswordGroup, type Result } from "./lib/generator";
 
 const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: "pw", label: "Пароль", hint: "Літери, цифри та безпечні символи на ваш вибір." },
-  { id: "hex", label: "Hex-ключ", hint: "Лише 0–9 і a–f. Підходить для ключів і токенів." },
-  { id: "b64", label: "Base64URL", hint: "A–Z, a–z, 0–9, «-» і «_». Безпечно для URL." },
+  { id: "pw", label: "Пароль", hint: "Результат містить символи з кожного ввімкненого набору." },
+  { id: "hex", label: "Hex-ключ", hint: "Два шістнадцяткові символи на кожен випадковий байт." },
+  { id: "b64", label: "Base64URL", hint: "Випадкові байти в кодуванні Base64URL без доповнення «=»." },
+  { id: "phrase", label: "Парольна фраза", hint: "Випадково вибрані англійські слова, розділені пробілами." },
 ];
 
-const UNSAFE = "$ & % ( ) { } [ ] \\ / ' \" ` < > | ; :";
+const GROUP_LABELS: Record<PasswordGroup, string> = {
+  lower: "Малі літери",
+  upper: "Великі літери",
+  digits: "Цифри",
+  symbols: "Символи для URL",
+  extraSymbols: "Додаткові спецсимволи",
+};
+
+const GROUP_HINTS: Record<PasswordGroup, string> = {
+  lower: "a–z",
+  upper: "A–Z",
+  digits: "0–9",
+  symbols: "- _ . ~",
+  extraSymbols: PASSWORD_GROUPS.extraSymbols.split("").join(" "),
+};
+
+const LENGTH_CONTROLS = {
+  length: { ...LIMITS.password, label: "Довжина в символах", presets: [16, 24, 32, 64, 128, 256] },
+  keyBytes: { ...LIMITS.key, label: "Довжина в байтах", presets: [16, 24, 32, 64, 128, 192] },
+  phraseWords: { ...LIMITS.phrase, label: "Кількість слів", presets: [6, 8, 10, 12] },
+};
 
 export default function App() {
   const [s, set] = useSettings();
   const [nonce, setNonce] = useState(0);
-  const [copyState, setCopyState] = useState<CopyState>("idle");
-  const timer = useRef<number | undefined>(undefined);
+  const [copy, setCopy] = useState<{ result: Result; state: "ok" | "fail" } | null>(null);
+  const copyRequest = useRef(0);
+  const {
+    mode, length, keyBytes, phraseWords, lower, upper, digits, symbols, extraSymbols, noAmbiguous,
+  } = s;
 
-  const result = useMemo(
-    () =>
-      generate({
-        mode: s.mode,
-        length: s.length,
-        lower: s.lower,
-        upper: s.upper,
-        digits: s.digits,
-        symbols: s.symbols,
-        noAmbiguous: s.noAmbiguous,
-      }),
-    // nonce змушує створити нове значення при натисканні «Згенерувати»
-    [s.mode, s.length, s.lower, s.upper, s.digits, s.symbols, s.noAmbiguous, nonce],
-  );
+  const result = useMemo(() => {
+    if (mode === "pw") {
+      return generate({ mode, length, lower, upper, digits, symbols, extraSymbols, noAmbiguous });
+    }
+    if (mode === "phrase") return generate({ mode, words: phraseWords });
+    return generate({ mode, bytes: keyBytes });
+  }, [mode, length, keyBytes, phraseWords, lower, upper, digits, symbols, extraSymbols, noAmbiguous, nonce]);
 
-  const regenerate = useCallback(() => setNonce((n) => n + 1), []);
+  const regenerate = () => setNonce((n) => n + 1);
 
-  const onCopy = useCallback(async () => {
+  const onCopy = async () => {
     if (!result) return;
+    const request = ++copyRequest.current;
     const ok = await copyText(result.value);
-    navigator.vibrate?.(10);
-    setCopyState(ok ? "ok" : "fail");
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => setCopyState("idle"), 1600);
-  }, [result]);
+    if (request === copyRequest.current) setCopy({ result, state: ok ? "ok" : "fail" });
+  };
 
-  // Гарячі клавіші працюють незалежно від розкладки (KeyR / KeyC).
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
-      if (e.code === "KeyR") regenerate();
-      if (e.code === "KeyC") void onCopy();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [regenerate, onCopy]);
+    if (!copy) return;
+    const timer = window.setTimeout(() => setCopy(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copy]);
 
-  // Не даємо вимкнути останній набір символів — результат ніколи не буде порожнім.
-  const enabled = [s.lower, s.upper, s.digits, s.symbols].filter(Boolean).length;
-  const lock = (on: boolean) => on && enabled === 1;
-  const modeHint = MODES.find((m) => m.id === s.mode)?.hint;
+  const enabled = GROUP_KEYS.filter((key) => s[key]).length;
+  const modeHint = MODES.find((m) => m.id === mode)?.hint;
+  const lengthKey = mode === "pw" ? "length" : mode === "phrase" ? "phraseWords" : "keyBytes";
 
   return (
     <div className="page">
@@ -78,7 +85,8 @@ export default function App() {
           <OutputCard
             result={result}
             hidden={s.hidden}
-            copyState={copyState}
+            isPhrase={mode === "phrase"}
+            copyState={copy?.result === result ? copy.state : "idle"}
             onToggleHidden={() => set("hidden", !s.hidden)}
             onRegenerate={regenerate}
             onCopy={onCopy}
@@ -92,7 +100,7 @@ export default function App() {
                 <button
                   key={m.id}
                   type="button"
-                  aria-pressed={s.mode === m.id}
+                  aria-pressed={mode === m.id}
                   onClick={() => set("mode", m.id)}
                 >
                   {m.label}
@@ -100,37 +108,41 @@ export default function App() {
               ))}
             </div>
             <p className="mode-hint">{modeHint}</p>
-            <LengthControl value={s.length} onChange={(v) => set("length", v)} />
+            <LengthControl
+              key={lengthKey}
+              {...LENGTH_CONTROLS[lengthKey]}
+              value={s[lengthKey]}
+              onChange={(v) => set(lengthKey, v)}
+            />
+            {mode === "phrase" && (
+              <p className="wordlist-credit">
+                Словник <a href="https://www.eff.org/dice">EFF Long Wordlist</a>
+                {" · "}<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>
+              </p>
+            )}
           </section>
 
-          <fieldset className="card opts" disabled={s.mode !== "pw"}>
-            <legend className="sr-only">Набори символів</legend>
-            <Toggle title="Малі літери" hint="a–z" checked={s.lower} disabled={lock(s.lower)} onChange={(v) => set("lower", v)} />
-            <Toggle title="Великі літери" hint="A–Z" checked={s.upper} disabled={lock(s.upper)} onChange={(v) => set("upper", v)} />
-            <Toggle title="Цифри" hint="0–9" checked={s.digits} disabled={lock(s.digits)} onChange={(v) => set("digits", v)} />
-            <Toggle
-              title="Безпечні символи"
-              hint={
-                <>
-                  <code>{SAFE_SYMBOLS.split("").join(" ")}</code> — працюють в URL, консолі, JSON і формах
-                </>
-              }
-              checked={s.symbols}
-              disabled={lock(s.symbols)}
-              onChange={(v) => set("symbols", v)}
-            />
-            <Toggle
-              title="Без схожих символів"
-              hint="Прибирає 0 O o 1 l I"
-              checked={s.noAmbiguous}
-              onChange={(v) => set("noAmbiguous", v)}
-            />
-          </fieldset>
-
-          <p className="note">
-            Символи {UNSAFE} свідомо не використовуються: вони ламають форми, скрипти та URL.
-            Генерація йде через Web Crypto, налаштування зберігаються лише на вашому пристрої.
-          </p>
+          {mode === "pw" && (
+            <fieldset className="card opts">
+              <legend className="sr-only">Набори символів</legend>
+              {GROUP_KEYS.map((key) => (
+                <Toggle
+                  key={key}
+                  title={GROUP_LABELS[key]}
+                  hint={GROUP_HINTS[key]}
+                  checked={s[key]}
+                  disabled={s[key] && enabled === 1}
+                  onChange={(value) => set(key, value)}
+                />
+              ))}
+              <Toggle
+                title="Без схожих символів"
+                hint="Прибирає 0 O o 1 l I"
+                checked={noAmbiguous}
+                onChange={(value) => set("noAmbiguous", value)}
+              />
+            </fieldset>
+          )}
         </div>
       </div>
     </div>
